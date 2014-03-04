@@ -6,6 +6,11 @@ module Listen
   class << self
     attr_accessor :stopping
 
+    # Collects all initialized listeners
+    def listeners
+      @listeners ||= []
+    end
+
     # Listens to file system modifications on a either single directory or multiple directories.
     #
     # When :forward_to is specified, this listener will broadcast modifications over TCP.
@@ -26,14 +31,15 @@ module Listen
       if target = options.delete(:forward_to)
         TCP::Listener.new(target, :broadcaster, *args, &block)
       else
-        Listener.new(*args, &block)
+        @listeners.push Listener.new(*args, &block)
       end
     end
 
     # Stop all listeners
     #
-    def stop
+    def stop(and_wait=false)
       @stopping = true
+      listeners.each{|l| l.thread.join } if and_wait
     end
 
     # Listens to file system modifications broadcast over TCP.
@@ -55,12 +61,6 @@ module Listen
 
     def boot_celluloid
       Celluloid.boot unless Celluloid.running?
-    end
-  end
-
-  unless defined?(JRUBY_VERSION)
-    if Signal.list.keys.include?('INT')
-      Signal.trap('INT') { Listen.stop }
     end
   end
 end
